@@ -7,6 +7,8 @@
 #include <cstdlib>
 #include <chrono>
 #include <iostream>
+#include <fstream>
+#include <iomanip>
  
 using namespace std;
 using namespace cv;
@@ -14,12 +16,16 @@ using namespace chrono;
 
 namespace po = boost::program_options;
 
-int     _fft_size       = 8192;
-int     _count          = 1000;
-int     _count_per_loop = 1000;
-double  _mean           = 5.0;
-double  _std            = 2.0;
-double  _invert         = false;
+const char* _data_file_name = "fft-data.txt";
+const char* _fft_file_name  = "fft-forward.txt";
+const char* _bak_file_name  = "fft-backward.txt";
+
+bool        _time           = false;
+int         _fft_size       = 8192;
+int         _count          = 1000;
+double      _mean           = 0.5;
+double      _std            = 0.2;
+double      _invert         = false;
 
 void populate(vector<Point2d>& data) {
     
@@ -27,9 +33,9 @@ void populate(vector<Point2d>& data) {
     std::normal_distribution<double> distribution(_mean, _std);
     
     for (int i = 0; i < _fft_size; ++i) {
-        double time = i * 0.20;
-        double amp = distribution(generator);
-        data.push_back(Point2d(time, amp));
+        double t = i * 0.20;
+        double a = distribution(generator);
+        data.push_back(Point2d(t, a));
     }
 }
 
@@ -44,67 +50,102 @@ void dump_fft(String label, vector<Point2d>& data) {
     cout << endl;
 }
 
-void time_fft() {
+void write_data(vector<Point2d> data, string filename) {
+    ofstream ofs;
+    ofs.open(filename);
+    
+    for (int i = 0; i < data.size(); ++i) {
+        ofs << data[i].x << ", " << data[i].y << endl;
+    }
+    
+    ofs.close();   
+}
 
+void write_fft() {
+ 
     vector<Point2d> data;
-    vector<Point2d> output;
-
-    cout.precision(2);
-    cerr << "0 %";
-    cerr.flush();
 
     nanoseconds total_duration(0);
 
-    for (int i = 0; i < _count; ++i) {
-
-        populate(data);
-        if (0 == i)
-            populate(output); // allocate space in output
-
-        int j = 0;
-        
-        if (_invert) {
-            high_resolution_clock::time_point start = high_resolution_clock::now();
-            for (; j < _count_per_loop; ++j) {
-                dft(data, data, 0, data.size());
-                dft(data, data, DFT_INVERSE | DFT_SCALE, data.size());
-            }        
-            high_resolution_clock::time_point finish = high_resolution_clock::now();
-
-            auto duration = finish - start;
-            total_duration += duration_cast<nanoseconds>(duration);
-            
-        } else {
-            high_resolution_clock::time_point start = high_resolution_clock::now();
-            for (; j < _count_per_loop; ++j) {
-                dft(data, output, 0, data.size());
-            }        
-            high_resolution_clock::time_point finish = high_resolution_clock::now();
-         
-            auto duration = finish - start;
-            total_duration += duration_cast<nanoseconds>(duration);
-        }        
+    populate(data);
+    write_data(data, _data_file_name);
        
-        if (i % 10 == 0) {
-            double percent = ((double) i / (double) _count * 100.0);
+    dft(data, data, 0, data.size());
+    write_data(data, _fft_file_name);
+    
+    dft(data, data, DFT_INVERSE | DFT_SCALE, data.size());
+    write_data(data, _bak_file_name);
+}
+
+nanoseconds fft() {
+    
+    vector<Point2d> data;
+    vector<Point2d> output;
+
+    nanoseconds total_duration(0);
+
+    populate(data);
+    populate(output);
+
+    int j = 0;
+    
+    if (_invert) {
+        high_resolution_clock::time_point start = high_resolution_clock::now();
+        
+        dft(data, data, 0, data.size());
+        dft(data, data, DFT_INVERSE | DFT_SCALE, data.size());
+            
+        high_resolution_clock::time_point finish = high_resolution_clock::now();
+
+        auto duration = finish - start;
+        total_duration = duration_cast<nanoseconds>(duration);
+        
+    } else {
+        high_resolution_clock::time_point start = high_resolution_clock::now();
+    
+        dft(data, output, 0, data.size());
+    
+        high_resolution_clock::time_point finish = high_resolution_clock::now();
+     
+        auto duration = finish - start;
+        total_duration = duration_cast<nanoseconds>(duration);
+    }
+
+    return total_duration;        
+}
+
+void time_fft() {
+    
+    cerr << "0 %";
+    cerr.flush();
+    
+    nanoseconds duration(0);
+    int last_percent = -1;
+    
+    for (int i = 0; i < _count; ++i) {
+        
+        duration += fft();
+        
+        int percent = (int) ((double) i / (double) _count * 100.0);
+        if (percent != last_percent) {
             cerr << "\r" << percent << " %    ";
             cerr.flush();
+            last_percent = percent;
         }
     }
     
-    double count = _count * _count_per_loop * (_invert ? 2 : 1);
-    double ave = total_duration.count() / count;
+    double count = _count * (_invert ? 2 : 1);
+    double ave = duration.count() / count;
 
     cout.precision(8);
     cerr << "\r100 % " << endl;
     cout << endl;
     cout << "Iterations: " << _count << endl;
-    cout << "Per loop:   " << _count_per_loop << endl;
     cout << "Data size:  " << _fft_size << endl;
     cout << "Mean:       " << _mean << endl;
     cout << "Std Dev:    " << _std << endl;
     cout << endl;
-    cout << "Time:       " << total_duration.count() << " ns" << endl;
+    cout << "Time:       " << duration.count() << " ns" << endl;
     cout << "Average:    " << ave << " ns (" << (ave / 1000.0) << " μs)" << endl;  
 }
 
@@ -116,9 +157,9 @@ int main(int ac, char* av[]) {
     
         desc.add_options()
         ("help,h",      "produce help message")
-        ("invert,i",    "Perform an FFT, then an inverse FFT on the same data")
+        ("time,t",      "Time the FFT operation")
+        ("invert,i",    "Perform timings on both the  FFT and inverse FFT")
         ("count,c",     po::value<int>(), "set the number of timed loops to perform")
-        ("loop,l",      po::value<int>(), "Set the number of FFT interations per loop")
         ("size,s",      po::value<int>(), "Set the size of the data buffer [8192]")
         ("mean,m",      po::value<double>(), "Set the range of the random data [25.0]")
         ("deviation,d", po::value<double>(), "Set the minimum value of the random data [0.0]");
@@ -132,6 +173,10 @@ int main(int ac, char* av[]) {
             return 1;
         }
         
+        if (vm.count("time")) {
+            _time = true;
+        }
+        
         if (vm.count("invert")) {
             _invert = true;
         }
@@ -140,10 +185,6 @@ int main(int ac, char* av[]) {
             _count = vm["count"].as<int>();
         }
     
-        if (vm.count("loop")) {
-            _count_per_loop = vm["loop"].as<int>();
-        }
-
         if (vm.count("size")) {
             _fft_size = vm["size"].as<int>();
         }
@@ -156,7 +197,10 @@ int main(int ac, char* av[]) {
             _std = vm["deviation"].as<double>();
         }
 
-        time_fft();
+        if (_time)
+            time_fft();
+        else
+            write_fft();
 
     } catch (exception& e) {
         cerr << "Error: " << e.what() << endl;
