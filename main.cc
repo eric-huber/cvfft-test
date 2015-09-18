@@ -27,7 +27,18 @@ double      _mean           = 0.5;
 double      _std            = 0.2;
 double      _invert         = false;
 
-void populate(vector<Point2d>& data) {
+vector<Point2d>     _data;
+vector<Point2d>     _output;
+
+void allocate() {
+    for (int i = 0; i < _fft_size; ++i) {
+        _data.push_back(Point2d(0.0, 0.0));
+        _output.push_back(Point2d(0.0, 0.0));
+    }    
+}
+
+
+void randomize() {
     
     std::default_random_engine       generator(std::random_device{}());
     std::normal_distribution<double> distribution(_mean, _std);
@@ -35,7 +46,8 @@ void populate(vector<Point2d>& data) {
     for (int i = 0; i < _fft_size; ++i) {
         double t = i * 0.20;
         double a = distribution(generator);
-        data.push_back(Point2d(t, a));
+        _data[i].x = t;
+        _data[i].y = a;
     }
 }
 
@@ -50,7 +62,7 @@ void dump_fft(String label, vector<Point2d>& data) {
     cout << endl;
 }
 
-void write_data(vector<Point2d> data, string filename) {
+void write_data(vector<Point2d>& data, string filename) {
     ofstream ofs;
     ofs.open(filename);
     
@@ -67,7 +79,7 @@ void write_fft() {
 
     nanoseconds total_duration(0);
 
-    populate(data);
+    randomize();
     write_data(data, _data_file_name);
        
     dft(data, data, 0, data.size());
@@ -78,32 +90,24 @@ void write_fft() {
 }
 
 nanoseconds fft() {
-    
-    vector<Point2d> data;
-    vector<Point2d> output;
-
     nanoseconds total_duration(0);
-
-    populate(data);
-    populate(output);
-
     high_resolution_clock::time_point start;
     high_resolution_clock::time_point finish;
 
-    int j = 0;
+    randomize();
     
     if (_invert) {
         start = high_resolution_clock::now();
         
-        dft(data, data, 0, data.size());
-        dft(data, data, DFT_INVERSE | DFT_SCALE, data.size());
+        dft(_data, _data, 0, _data.size());
+        dft(_data, _data, DFT_INVERSE | DFT_SCALE, _data.size());
             
         finish = high_resolution_clock::now();
        
     } else {
         start = high_resolution_clock::now();
     
-        dft(data, output, 0, data.size());
+        dft(_data, _output, 0, _data.size());
     
         finish = high_resolution_clock::now();
     }
@@ -197,6 +201,7 @@ int main(int ac, char* av[]) {
             _std = vm["deviation"].as<double>();
         }
 
+        allocate();
         if (_time)
             time_fft();
         else
