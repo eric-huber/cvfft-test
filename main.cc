@@ -87,29 +87,29 @@ nanoseconds fft() {
     populate(data);
     populate(output);
 
+    high_resolution_clock::time_point start;
+    high_resolution_clock::time_point finish;
+
     int j = 0;
     
     if (_invert) {
-        high_resolution_clock::time_point start = high_resolution_clock::now();
+        start = high_resolution_clock::now();
         
         dft(data, data, 0, data.size());
         dft(data, data, DFT_INVERSE | DFT_SCALE, data.size());
             
-        high_resolution_clock::time_point finish = high_resolution_clock::now();
-
-        auto duration = finish - start;
-        total_duration = duration_cast<nanoseconds>(duration);
-        
+        finish = high_resolution_clock::now();
+       
     } else {
-        high_resolution_clock::time_point start = high_resolution_clock::now();
+        start = high_resolution_clock::now();
     
         dft(data, output, 0, data.size());
     
-        high_resolution_clock::time_point finish = high_resolution_clock::now();
-     
-        auto duration = finish - start;
-        total_duration = duration_cast<nanoseconds>(duration);
+        finish = high_resolution_clock::now();
     }
+    
+    auto duration = finish - start;
+    total_duration = duration_cast<nanoseconds>(duration);
 
     return total_duration;        
 }
