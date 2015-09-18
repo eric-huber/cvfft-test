@@ -74,19 +74,16 @@ void write_data(vector<Point2d>& data, string filename) {
 }
 
 void write_fft() {
- 
-    vector<Point2d> data;
-
-    nanoseconds total_duration(0);
+     nanoseconds total_duration(0);
 
     randomize();
-    write_data(data, _data_file_name);
+    write_data(_data, _data_file_name);
        
-    dft(data, data, 0, data.size());
-    write_data(data, _fft_file_name);
+    dft(_data, _data, 0, _data.size());
+    write_data(_data, _fft_file_name);
     
-    dft(data, data, DFT_INVERSE | DFT_SCALE, data.size());
-    write_data(data, _bak_file_name);
+    dft(_data, _data, DFT_INVERSE | DFT_SCALE, _data.size());
+    write_data(_data, _bak_file_name);
 }
 
 nanoseconds fft() {
