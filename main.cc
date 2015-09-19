@@ -21,6 +21,7 @@ const char* _fft_file_name  = "fft-forward.txt";
 const char* _bak_file_name  = "fft-backward.txt";
 
 bool        _time           = false;
+bool        _ave_sqer       = false;
 int         _fft_size       = 8192;
 int         _count          = 1000;
 double      _mean           = 0.5;
@@ -37,7 +38,6 @@ void allocate() {
     }    
 }
 
-
 void randomize() {
     
     std::default_random_engine       generator(std::random_device{}());
@@ -48,6 +48,12 @@ void randomize() {
         double a = distribution(generator);
         _data[i].x = t;
         _data[i].y = a;
+    }
+}
+
+void copy(vector<Point2d>& src, vector<Point2d>& dst) {
+    for (int i = 0; i < src.size(); ++i) {
+        dst.push_back(Point2d(src[i].x, src[i].y));
     }
 }
 
@@ -73,10 +79,37 @@ void write_data(vector<Point2d>& data, string filename) {
     ofs.close();   
 }
 
+double signal_energy(vector<Point2d>& input) {
+    
+    double si = 0;
+    for (int i = 0; i < input.size(); ++i) {
+        si += pow(input[i].y, 2);
+    }
+    return si;
+}
+
+double quant_err_energy(vector<Point2d>& input, vector<Point2d>& output)  {
+    
+    double qe = 0;
+    for (int i = 0; i < input.size(); ++i) {
+        qe += pow(input[i].y - output[i].y, 2);
+    }
+    return qe;
+}
+
+double sqer(vector<Point2d>& input, vector<Point2d>& output) {
+    double se = signal_energy(input);
+    double qe = quant_err_energy(input, output);
+    
+    return 10 * log10(se / qe);
+}
+
 void write_fft() {
-     nanoseconds total_duration(0);
+
+    vector<Point2d> orig;
 
     randomize();
+    copy(_data, orig);
     write_data(_data, _data_file_name);
        
     dft(_data, _data, 0, _data.size());
@@ -84,6 +117,53 @@ void write_fft() {
     
     dft(_data, _data, DFT_INVERSE | DFT_SCALE, _data.size());
     write_data(_data, _bak_file_name);
+
+    cout << "Mean:       " << _mean << endl;
+    cout << "Std Dev:    " << _std << endl;
+    cout << endl;
+    cout << "SQER:       " << sqer(orig, _data) << endl;
+}
+
+double fft_sqer() {
+
+    vector<Point2d> orig;
+
+    randomize();
+    copy(_data, orig);
+       
+    dft(_data, _data, 0, _data.size());
+    dft(_data, _data, DFT_INVERSE | DFT_SCALE, _data.size());
+
+    return sqer(orig, _data);
+}
+
+void ave_sqr() {
+
+    cerr << "0 %";
+    cerr.flush();
+    
+    double sqer = 0;
+    int last_percent = -1;
+    
+    for (int i = 0; i < _count; ++i) {
+        
+        sqer += fft_sqer();
+        
+        int percent = (int) ((double) i / (double) _count * 100.0);
+        if (percent != last_percent) {
+            cerr << "\r" << percent << " %    ";
+            cerr.flush();
+            last_percent = percent;
+        }
+    }
+    
+    sqer /= _count;
+
+    cout << "Iterations: " << _count << endl;
+    cout << "Mean:       " << _mean << endl;
+    cout << "Std Dev:    " << _std << endl;
+    cout << endl;
+    cout << "Ave SQER:   " << sqer << endl;    
 }
 
 nanoseconds fft() {
@@ -159,6 +239,7 @@ int main(int ac, char* av[]) {
         desc.add_options()
         ("help,h",      "produce help message")
         ("time,t",      "Time the FFT operation")
+        ("ave,a",       "Ave SQER")
         ("invert,i",    "Perform timings on both the  FFT and inverse FFT")
         ("count,c",     po::value<int>(), "set the number of timed loops to perform")
         ("size,s",      po::value<int>(), "Set the size of the data buffer [8192]")
@@ -176,6 +257,10 @@ int main(int ac, char* av[]) {
         
         if (vm.count("time")) {
             _time = true;
+        }
+        
+        if (vm.count("ave")) {
+            _ave_sqer = true;
         }
         
         if (vm.count("invert")) {
@@ -201,6 +286,8 @@ int main(int ac, char* av[]) {
         allocate();
         if (_time)
             time_fft();
+        else if (_ave_sqer) 
+            ave_sqr();
         else
             write_fft();
 
