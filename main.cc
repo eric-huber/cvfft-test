@@ -21,7 +21,6 @@ const char* _fft_file_name  = "fft-forward.txt";
 const char* _bak_file_name  = "fft-backward.txt";
 
 bool        _time           = false;
-bool        _ave_sqer       = false;
 int         _fft_size       = 8192;
 int         _count          = 1000;
 double      _mean           = 0.5;
@@ -71,7 +70,8 @@ void dump_fft(String label, vector<Point2d>& data) {
 void write_data(vector<Point2d>& data, string filename) {
     ofstream ofs;
     ofs.open(filename);
-    
+    ofs.precision(10);
+
     for (int i = 0; i < data.size(); ++i) {
         ofs << data[i].x << ", " << data[i].y << endl;
     }
@@ -124,75 +124,35 @@ void write_fft() {
     cout << "SQER:       " << sqer(orig, _data) << endl;
 }
 
-double fft_sqer() {
+void fft_sqer(nanoseconds& duration, double& error) {
 
     vector<Point2d> orig;
 
     randomize();
     copy(_data, orig);
-       
+
+    high_resolution_clock::time_point start = high_resolution_clock::now();
+
     dft(_data, _data, 0, _data.size());
     dft(_data, _data, DFT_INVERSE | DFT_SCALE, _data.size());
+    
+    high_resolution_clock::time_point finish = high_resolution_clock::now();
 
-    return sqer(orig, _data);
+    duration = duration_cast<nanoseconds>(finish - start);
+    error = sqer(orig, _data);
 }
 
-void ave_sqr() {
-
-    cerr << "0 %";
-    cerr.flush();
-    
-    double sqer = 0;
-    int last_percent = -1;
-    
-    for (int i = 0; i < _count; ++i) {
-        
-        sqer += fft_sqer();
-        
-        int percent = (int) ((double) i / (double) _count * 100.0);
-        if (percent != last_percent) {
-            cerr << "\r" << percent << " %    ";
-            cerr.flush();
-            last_percent = percent;
-        }
-    }
-    
-    sqer /= _count;
-
-    cout << "Iterations: " << _count << endl;
-    cout << "Mean:       " << _mean << endl;
-    cout << "Std Dev:    " << _std << endl;
-    cout << endl;
-    cout << "Ave SQER:   " << sqer << endl;    
-}
-
-nanoseconds fft() {
-    nanoseconds total_duration(0);
-    high_resolution_clock::time_point start;
-    high_resolution_clock::time_point finish;
+void fft(nanoseconds& duration) {
 
     randomize();
     
-    if (_invert) {
-        start = high_resolution_clock::now();
-        
-        dft(_data, _data, 0, _data.size());
-        dft(_data, _data, DFT_INVERSE | DFT_SCALE, _data.size());
-            
-        finish = high_resolution_clock::now();
-       
-    } else {
-        start = high_resolution_clock::now();
+    high_resolution_clock::time_point start = high_resolution_clock::now();
     
-        dft(_data, _output, 0, _data.size());
-    
-        finish = high_resolution_clock::now();
-    }
-    
-    auto duration = finish - start;
-    total_duration = duration_cast<nanoseconds>(duration);
+    dft(_data, _output, 0, _data.size());
 
-    return total_duration;        
+    high_resolution_clock::time_point finish = high_resolution_clock::now();
+
+    duration = duration_cast<nanoseconds>(finish - start);
 }
 
 void time_fft() {
@@ -200,12 +160,21 @@ void time_fft() {
     cerr << "0 %";
     cerr.flush();
     
-    nanoseconds duration(0);
-    int last_percent = -1;
+    nanoseconds total_duration(0);
+    double      total_sqer = 0;
+    int         last_percent = -1;
     
     for (int i = 0; i < _count; ++i) {
         
-        duration += fft();
+        nanoseconds duration(0);
+        double sqer = 0;
+        if (_invert)
+            fft_sqer(duration, sqer);
+        else
+            fft(duration);
+        
+        total_duration += duration;
+        total_sqer += sqer;
         
         int percent = (int) ((double) i / (double) _count * 100.0);
         if (percent != last_percent) {
@@ -215,8 +184,9 @@ void time_fft() {
         }
     }
     
-    double count = _count * (_invert ? 2 : 1);
-    double ave = duration.count() / count;
+    double count    = _count * (_invert ? 2 : 1);
+    double ave_dur  = total_duration.count() / count;
+    double ave_sqer = total_sqer / count;
 
     cout.precision(8);
     cerr << "\r100 % " << endl;
@@ -226,8 +196,10 @@ void time_fft() {
     cout << "Mean:       " << _mean << endl;
     cout << "Std Dev:    " << _std << endl;
     cout << endl;
-    cout << "Time:       " << duration.count() << " ns" << endl;
-    cout << "Average:    " << ave << " ns (" << (ave / 1000.0) << " μs)" << endl;  
+    cout << "Time:       " << total_duration.count() << " ns" << endl;
+    cout << "Average:    " << ave_dur << " ns (" << (ave_dur / 1000.0) << " μs)" << endl;
+    if (_invert) 
+        cout << "SQER:       " << ave_sqer << endl; 
 }
 
 int main(int ac, char* av[]) {
@@ -239,7 +211,6 @@ int main(int ac, char* av[]) {
         desc.add_options()
         ("help,h",      "produce help message")
         ("time,t",      "Time the FFT operation")
-        ("ave,a",       "Ave SQER")
         ("invert,i",    "Perform timings on both the  FFT and inverse FFT")
         ("count,c",     po::value<int>(), "set the number of timed loops to perform")
         ("size,s",      po::value<int>(), "Set the size of the data buffer [8192]")
@@ -257,10 +228,6 @@ int main(int ac, char* av[]) {
         
         if (vm.count("time")) {
             _time = true;
-        }
-        
-        if (vm.count("ave")) {
-            _ave_sqer = true;
         }
         
         if (vm.count("invert")) {
@@ -286,8 +253,6 @@ int main(int ac, char* av[]) {
         allocate();
         if (_time)
             time_fft();
-        else if (_ave_sqer) 
-            ave_sqr();
         else
             write_fft();
 
