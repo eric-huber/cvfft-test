@@ -187,7 +187,7 @@ void time_fft() {
     
     double count    = _count * (_invert ? 2 : 1);
     double ave_dur  = total_duration.count() / count;
-    double ave_sqer = total_sqer / count;
+    double ave_sqer = total_sqer / _count;
 
     cout.precision(8);
     cerr << "\r100 % " << endl;
