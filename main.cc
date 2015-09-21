@@ -118,6 +118,7 @@ void write_fft() {
     dft(_data, _data, DFT_INVERSE | DFT_SCALE, _data.size());
     write_data(_data, _bak_file_name);
 
+    cout << "Data size:  " << _fft_size << endl;
     cout << "Mean:       " << _mean << endl;
     cout << "Std Dev:    " << _std << endl;
     cout << endl;
