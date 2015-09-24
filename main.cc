@@ -26,6 +26,7 @@ int             _count          = 1000;
 double          _mean           = 0.5;
 double          _std            = 0.2;
 double          _invert         = false;
+bool            _use_periodic   = false;
 
 vector<double>  _data;
 vector<double>  _output;
@@ -45,6 +46,23 @@ void randomize() {
     for (int i = 0; i < _fft_size; ++i) {
         _data[i] = distribution(generator);
     }
+}
+
+void periodic() {
+    for (int i = 0; i < _fft_size; ++i) {
+        double t = i * .002;
+        double amp = sin(M_PI * t);
+        amp += sin(2 * M_PI * t);
+        amp += sin(3 * M_PI * t); 
+        _data[i] = amp;
+    }
+}
+
+void populate() {
+    if (_use_periodic)
+        periodic();
+    else
+        randomize();
 }
 
 void copy(vector<double>& src, vector<double>& dst) {
@@ -76,13 +94,14 @@ void write_data(vector<double>& data, string filename) {
     ofs.close();   
 }
 
-void write_data_hermitian(vector<double>& data, string filename) {
+void write_data_ccs(vector<double>& data, string filename) {
     ofstream ofs;
     ofs.open(filename);
     ofs.precision(10);
 
-    for (int i = 0; i < data.size(); i+=2) {
-        ofs << data[i] << ", " << data[i+1] << endl;
+    for (int i = 1; i < data.size() / 2; i+=2) {
+        double amp = sqrt(pow(data[i], 2) + pow(data[i+1], 2));
+        ofs << amp << endl;
     }
     
     ofs.close();
@@ -117,19 +136,23 @@ void write_fft() {
 
     vector<double> orig;
 
-    randomize();
+    //randomize();
+    periodic();
     copy(_data, orig);
     write_data(_data, _data_file_name);
        
     dft(_data, _data, 0, _data.size());
-    write_data_hermitian(_data, _fft_file_name);
+    write_data_ccs(_data, _fft_file_name);
     
     dft(_data, _data, DFT_INVERSE | DFT_SCALE, _data.size());
     write_data(_data, _bak_file_name);
 
     cout << "Data size:  " << _fft_size << endl;
-    cout << "Mean:       " << _mean << endl;
-    cout << "Std Dev:    " << _std << endl;
+    cout << "Data type:  " << (_use_periodic ? "Periodic" : "Random") << endl;
+    if (!_use_periodic) {
+        cout << "Mean:       " << _mean << endl;
+        cout << "Std Dev:    " << _std << endl;
+    }
     cout << endl;
     cout << "SQER:       " << sqer(orig, _data) << endl;
 }
@@ -138,7 +161,7 @@ void fft_sqer(nanoseconds& duration, double& error) {
 
     vector<double> orig;
 
-    randomize();
+    populate();
     copy(_data, orig);
 
     high_resolution_clock::time_point start = high_resolution_clock::now();
@@ -154,7 +177,7 @@ void fft_sqer(nanoseconds& duration, double& error) {
 
 void fft(nanoseconds& duration) {
 
-    randomize();
+    populate();
     
     high_resolution_clock::time_point start = high_resolution_clock::now();
     
@@ -203,8 +226,12 @@ void time_fft() {
     cout << endl;
     cout << "Iterations: " << _count << endl;
     cout << "Data size:  " << _fft_size << endl;
-    cout << "Mean:       " << _mean << endl;
-    cout << "Std Dev:    " << _std << endl;
+    cout << "Data size:  " << _fft_size << endl;
+    cout << "Data type:  " << (_use_periodic ? "Periodic" : "Random") << endl;
+    if (!_use_periodic) {
+        cout << "Mean:       " << _mean << endl;
+        cout << "Std Dev:    " << _std << endl;
+    }
     cout << endl;
     cout << "Time:       " << total_duration.count() << " ns" << endl;
     cout << "Average:    " << ave_dur << " ns (" << (ave_dur / 1000.0) << " μs)" << endl;
@@ -225,7 +252,8 @@ int main(int ac, char* av[]) {
         ("count,c",     po::value<int>(), "set the number of timed loops to perform")
         ("size,s",      po::value<int>(), "Set the size of the data buffer [8192]")
         ("mean,m",      po::value<double>(), "Set the range of the random data [25.0]")
-        ("deviation,d", po::value<double>(), "Set the minimum value of the random data [0.0]");
+        ("deviation,d", po::value<double>(), "Set the minimum value of the random data [0.0]")
+        ("periodic,p",  "Use periodic instead of random data");
 
         po::variables_map vm;
         po::store(po::parse_command_line(ac, av, desc), vm);
@@ -258,6 +286,10 @@ int main(int ac, char* av[]) {
         
         if (vm.count("deviation")) {
             _std = vm["deviation"].as<double>();
+        }
+        
+        if (vm.count("periodic")) {
+            _use_periodic = true;
         }
 
         allocate();
