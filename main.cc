@@ -16,24 +16,24 @@ using namespace chrono;
 
 namespace po = boost::program_options;
 
-const char* _data_file_name = "fft-data.txt";
-const char* _fft_file_name  = "fft-forward.txt";
-const char* _bak_file_name  = "fft-backward.txt";
+const char*     _data_file_name = "fft-data.txt";
+const char*     _fft_file_name  = "fft-forward.txt";
+const char*     _bak_file_name  = "fft-backward.txt";
 
-bool        _time           = false;
-int         _fft_size       = 8192;
-int         _count          = 1000;
-double      _mean           = 0.5;
-double      _std            = 0.2;
-double      _invert         = false;
+bool            _time           = false;
+int             _fft_size       = 8192;
+int             _count          = 1000;
+double          _mean           = 0.5;
+double          _std            = 0.2;
+double          _invert         = false;
 
-vector<Point2d>     _data;
-vector<Point2d>     _output;
+vector<double>  _data;
+vector<double>  _output;
 
 void allocate() {
     for (int i = 0; i < _fft_size; ++i) {
-        _data.push_back(Point2d(0.0, 0.0));
-        _output.push_back(Point2d(0.0, 0.0));
+        _data.push_back(0.0);
+        _output.push_back(0.0);
     }    
 }
 
@@ -43,61 +43,70 @@ void randomize() {
     std::normal_distribution<double> distribution(_mean, _std);
     
     for (int i = 0; i < _fft_size; ++i) {
-        double t = i * 0.20;
-        double a = distribution(generator);
-        _data[i].x = t;
-        _data[i].y = a;
+        _data[i] = distribution(generator);
     }
 }
 
-void copy(vector<Point2d>& src, vector<Point2d>& dst) {
+void copy(vector<double>& src, vector<double>& dst) {
     for (int i = 0; i < src.size(); ++i) {
-        dst.push_back(Point2d(src[i].x, src[i].y));
+        dst.push_back(src[i]);
     }
 }
 
-void dump_fft(String label, vector<Point2d>& data) {
+void dump_fft(String label, vector<double>& data) {
     
     cout << label << " size " << data.size() << endl;
     for (int i = 0; i < 48 ; ++i) {
-        cout << data[i].x << ",\t " << data[i].y << endl;
+        cout << data[i] << endl;
         if (i % 8 == 0 && i != 0)
             cout << endl;
     }
     cout << endl;
 }
 
-void write_data(vector<Point2d>& data, string filename) {
+void write_data(vector<double>& data, string filename) {
     ofstream ofs;
     ofs.open(filename);
     ofs.precision(10);
 
     for (int i = 0; i < data.size(); ++i) {
-        ofs << data[i].x << ", " << data[i].y << endl;
+        ofs << data[i] << endl;
     }
     
     ofs.close();   
 }
 
-double signal_energy(vector<Point2d>& input) {
+void write_data_hermitian(vector<double>& data, string filename) {
+    ofstream ofs;
+    ofs.open(filename);
+    ofs.precision(10);
+
+    for (int i = 0; i < data.size(); i+=2) {
+        ofs << data[i] << ", " << data[i+1] << endl;
+    }
+    
+    ofs.close();
+}
+
+double signal_energy(vector<double>& input) {
     
     double si = 0;
     for (int i = 0; i < input.size(); ++i) {
-        si += pow(input[i].y, 2);
+        si += pow(input[i], 2);
     }
     return si;
 }
 
-double quant_err_energy(vector<Point2d>& input, vector<Point2d>& output)  {
+double quant_err_energy(vector<double>& input, vector<double>& output)  {
     
     double qe = 0;
     for (int i = 0; i < input.size(); ++i) {
-        qe += pow(input[i].y - output[i].y, 2);
+        qe += pow(input[i] - output[i], 2);
     }
     return qe;
 }
 
-double sqer(vector<Point2d>& input, vector<Point2d>& output) {
+double sqer(vector<double>& input, vector<double>& output) {
     double se = signal_energy(input);
     double qe = quant_err_energy(input, output);
     
@@ -106,14 +115,14 @@ double sqer(vector<Point2d>& input, vector<Point2d>& output) {
 
 void write_fft() {
 
-    vector<Point2d> orig;
+    vector<double> orig;
 
     randomize();
     copy(_data, orig);
     write_data(_data, _data_file_name);
        
     dft(_data, _data, 0, _data.size());
-    write_data(_data, _fft_file_name);
+    write_data_hermitian(_data, _fft_file_name);
     
     dft(_data, _data, DFT_INVERSE | DFT_SCALE, _data.size());
     write_data(_data, _bak_file_name);
@@ -127,7 +136,7 @@ void write_fft() {
 
 void fft_sqer(nanoseconds& duration, double& error) {
 
-    vector<Point2d> orig;
+    vector<double> orig;
 
     randomize();
     copy(_data, orig);
