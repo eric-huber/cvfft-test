@@ -136,8 +136,7 @@ void write_fft() {
 
     vector<double> orig;
 
-    //randomize();
-    periodic();
+    populate();
     copy(_data, orig);
     write_data(_data, _data_file_name);
        
