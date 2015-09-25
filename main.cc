@@ -225,7 +225,6 @@ void time_fft() {
     cout << endl;
     cout << "Iterations: " << _count << endl;
     cout << "Data size:  " << _fft_size << endl;
-    cout << "Data size:  " << _fft_size << endl;
     cout << "Data type:  " << (_use_periodic ? "Periodic" : "Random") << endl;
     if (!_use_periodic) {
         cout << "Mean:       " << _mean << endl;
@@ -234,8 +233,11 @@ void time_fft() {
     cout << endl;
     cout << "Time:       " << total_duration.count() << " ns" << endl;
     cout << "Average:    " << ave_dur << " ns (" << (ave_dur / 1000.0) << " μs)" << endl;
-    if (_invert) 
-        cout << "SQER:       " << ave_sqer << endl; 
+    
+    if (_invert) { 
+        cout << "SQER:       " << total_sqer << endl;
+        cout << "Ave SQER:   " << ave_sqer << endl;    
+    } 
 }
 
 int main(int ac, char* av[]) {
