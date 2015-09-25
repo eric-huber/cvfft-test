@@ -23,13 +23,13 @@ const char*     _bak_file_name  = "fft-backward.txt";
 bool            _time           = false;
 int             _fft_size       = 8192;
 int             _count          = 1000;
-double          _mean           = 0.5;
-double          _std            = 0.2;
-double          _invert         = false;
+float           _mean           = 0.5;
+float           _std            = 0.2;
+float           _invert         = false;
 bool            _use_periodic   = false;
 
-vector<double>  _data;
-vector<double>  _output;
+vector<float>  _data;
+vector<float>  _output;
 
 void allocate() {
     for (int i = 0; i < _fft_size; ++i) {
@@ -41,7 +41,7 @@ void allocate() {
 void randomize() {
     
     std::default_random_engine       generator(std::random_device{}());
-    std::normal_distribution<double> distribution(_mean, _std);
+    std::normal_distribution<float> distribution(_mean, _std);
     
     for (int i = 0; i < _fft_size; ++i) {
         _data[i] = distribution(generator);
@@ -50,8 +50,8 @@ void randomize() {
 
 void periodic() {
     for (int i = 0; i < _fft_size; ++i) {
-        double t = i * .002;
-        double amp = sin(M_PI * t);
+        float t = i * .002;
+        float amp = sin(M_PI * t);
         amp += sin(2 * M_PI * t);
         amp += sin(3 * M_PI * t); 
         _data[i] = amp;
@@ -65,13 +65,13 @@ void populate() {
         randomize();
 }
 
-void copy(vector<double>& src, vector<double>& dst) {
+void copy(vector<float>& src, vector<float>& dst) {
     for (int i = 0; i < src.size(); ++i) {
         dst.push_back(src[i]);
     }
 }
 
-void dump_fft(String label, vector<double>& data) {
+void dump_fft(String label, vector<float>& data) {
     
     cout << label << " size " << data.size() << endl;
     for (int i = 0; i < 48 ; ++i) {
@@ -82,7 +82,7 @@ void dump_fft(String label, vector<double>& data) {
     cout << endl;
 }
 
-void write_data(vector<double>& data, string filename) {
+void write_data(vector<float>& data, string filename) {
     ofstream ofs;
     ofs.open(filename);
     ofs.precision(10);
@@ -94,47 +94,47 @@ void write_data(vector<double>& data, string filename) {
     ofs.close();   
 }
 
-void write_data_ccs(vector<double>& data, string filename) {
+void write_data_ccs(vector<float>& data, string filename) {
     ofstream ofs;
     ofs.open(filename);
     ofs.precision(10);
 
     for (int i = 1; i < data.size() / 2; i+=2) {
-        double amp = sqrt(pow(data[i], 2) + pow(data[i+1], 2));
+        float amp = sqrt(pow(data[i], 2) + pow(data[i+1], 2));
         ofs << amp << endl;
     }
     
     ofs.close();
 }
 
-double signal_energy(vector<double>& input) {
+float signal_energy(vector<float>& input) {
     
-    double si = 0;
+    float si = 0;
     for (int i = 0; i < input.size(); ++i) {
         si += pow(input[i], 2);
     }
     return si;
 }
 
-double quant_err_energy(vector<double>& input, vector<double>& output)  {
+float quant_err_energy(vector<float>& input, vector<float>& output)  {
     
-    double qe = 0;
+    float qe = 0;
     for (int i = 0; i < input.size(); ++i) {
         qe += pow(input[i] - output[i], 2);
     }
     return qe;
 }
 
-double sqer(vector<double>& input, vector<double>& output) {
-    double se = signal_energy(input);
-    double qe = quant_err_energy(input, output);
+float sqer(vector<float>& input, vector<float>& output) {
+    float se = signal_energy(input);
+    float qe = quant_err_energy(input, output);
     
     return 10 * log10(se / qe);
 }
 
 void write_fft() {
 
-    vector<double> orig;
+    vector<float> orig;
 
     populate();
     copy(_data, orig);
@@ -156,9 +156,9 @@ void write_fft() {
     cout << "SQER:       " << sqer(orig, _data) << endl;
 }
 
-void fft_sqer(nanoseconds& duration, double& error) {
+void fft_sqer(nanoseconds& duration, float& error) {
 
-    vector<double> orig;
+    vector<float> orig;
 
     populate();
     copy(_data, orig);
@@ -193,13 +193,13 @@ void time_fft() {
     cerr.flush();
     
     nanoseconds total_duration(0);
-    double      total_sqer = 0;
+    float      total_sqer = 0;
     int         last_percent = -1;
     
     for (int i = 0; i < _count; ++i) {
         
         nanoseconds duration(0);
-        double sqer = 0;
+        float sqer = 0;
         if (_invert)
             fft_sqer(duration, sqer);
         else
@@ -208,7 +208,7 @@ void time_fft() {
         total_duration += duration;
         total_sqer += sqer;
         
-        int percent = (int) ((double) i / (double) _count * 100.0);
+        int percent = (int) ((float) i / (float) _count * 100.0);
         if (percent != last_percent) {
             cerr << "\r" << percent << " %    ";
             cerr.flush();
@@ -216,9 +216,9 @@ void time_fft() {
         }
     }
     
-    double count    = _count * (_invert ? 2 : 1);
-    double ave_dur  = total_duration.count() / count;
-    double ave_sqer = total_sqer / _count;
+    float count    = _count * (_invert ? 2 : 1);
+    float ave_dur  = total_duration.count() / count;
+    float ave_sqer = total_sqer / _count;
 
     cout.precision(8);
     cerr << "\r100 % " << endl;
@@ -252,8 +252,8 @@ int main(int ac, char* av[]) {
         ("invert,i",    "Perform timings on both the  FFT and inverse FFT")
         ("count,c",     po::value<int>(), "set the number of timed loops to perform")
         ("size,s",      po::value<int>(), "Set the size of the data buffer [8192]")
-        ("mean,m",      po::value<double>(), "Set the range of the random data [25.0]")
-        ("deviation,d", po::value<double>(), "Set the minimum value of the random data [0.0]")
+        ("mean,m",      po::value<float>(), "Set the range of the random data [25.0]")
+        ("deviation,d", po::value<float>(), "Set the minimum value of the random data [0.0]")
         ("periodic,p",  "Use periodic instead of random data");
 
         po::variables_map vm;
@@ -282,11 +282,11 @@ int main(int ac, char* av[]) {
         }
         
         if (vm.count("mean")) {
-            _mean = vm["mean"].as<double>();
+            _mean = vm["mean"].as<float>();
         }
         
         if (vm.count("deviation")) {
-            _std = vm["deviation"].as<double>();
+            _std = vm["deviation"].as<float>();
         }
         
         if (vm.count("periodic")) {
